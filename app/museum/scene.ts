@@ -203,6 +203,11 @@ export function mountScene(
   });
   const site = new THREE.Vector3();
   const globeCenter = new THREE.Vector3();
+  const startSite = new THREE.Vector3();
+  const siteDirection = new THREE.Vector3();
+  const viewDirection = new THREE.Vector3(0, 0, 1);
+  const turnToFront = new THREE.Quaternion();
+  const facingRotation = new THREE.Quaternion();
   ensure('moon');
 
   renderer.setAnimationLoop((time) => {
@@ -252,8 +257,9 @@ export function mountScene(
       if (active && group.visible && !still && !input.dragging && !input.mission && zoom < 0.03 && time >= input.resumeAt) {
         input[world] -= dt * 0.085;
       }
-      group.rotation.y = input[world];
-      group.rotation.x = 0.1;
+      // Start each frame from the browsing pose, including zero roll.
+      // Slerping toward a mission can change all three Euler angles.
+      group.rotation.set(0.1, input[world], 0);
     }
 
     if (input.mission) zoomedMission = input.mission;
@@ -276,17 +282,28 @@ export function mountScene(
       }
     }
 
-    // Zoom the orthographic view without growing the mesh through the near plane.
-    const magnification = lerp(1, 3.5, zoom);
+    // Turn the selected site toward the camera along the shortest arc.
+    const approach = smoothstep(zoom, 0, 1);
+    const magnification = lerp(1, 3.5, approach);
     if (camera.zoom !== magnification) {
       camera.zoom = magnification;
       camera.updateProjectionMatrix();
     }
-    if (zoom > 0) {
+    if (approach > 0) {
       const target = sites.find(({ id }) => id === zoomedMission)!;
-      site.copy(target.point).applyMatrix4(groups[target.world].matrixWorld);
-      camera.position.x = site.x * zoom;
-      camera.position.y = site.y * zoom;
+      const group = groups[target.world];
+      startSite.copy(target.point).applyMatrix4(group.matrixWorld);
+      siteDirection.copy(target.point).applyQuaternion(group.quaternion).normalize();
+      turnToFront.setFromUnitVectors(siteDirection, viewDirection);
+      facingRotation.multiplyQuaternions(turnToFront, group.quaternion);
+      group.quaternion.slerp(facingRotation, approach);
+      group.updateMatrixWorld(true);
+      site.copy(target.point).applyMatrix4(group.matrixWorld);
+
+      // Magnification should not push the selected site back toward the edge.
+      const screenOffset = (1 - approach) / magnification;
+      camera.position.x = site.x - startSite.x * screenOffset;
+      camera.position.y = site.y - startSite.y * screenOffset;
     } else {
       camera.position.x = 0;
       camera.position.y = 0;
