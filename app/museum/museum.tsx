@@ -1,26 +1,56 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
+import { preload } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 import type { Destination, SceneInput, SceneStatus } from './scene';
+import MissionDialog from './mission-dialog';
+import LanguageSettings from './language-settings';
+import { museumCopy, type Language } from './languages';
+import { missionIds, missions, type MissionId } from './missions';
 import styles from './museum.module.css';
 
-const destinations = {
-  moon: { name: 'Луна', next: 'Марс' },
-  mars: { name: 'Марс', next: 'Луна' },
-} as const;
-
 export default function Museum() {
+  const markers = useRef<Partial<Record<MissionId, HTMLButtonElement>>>({});
+  const [selectedMission, setSelectedMission] = useState<MissionId>('lunokhod');
+  const dialog = useRef<HTMLDialogElement>(null);
+  const rotation = useRef<HTMLDivElement>(null);
+  const [closing, setClosing] = useState(false);
   const sky = useRef<HTMLDivElement>(null);
   const explore = useRef<HTMLElement>(null);
   const finale = useRef<HTMLElement>(null);
-  const input = useRef<SceneInput>({ destination: 'moon', moon: 0, mars: 0, dragging: false, resumeAt: 0 });
+  const input = useRef<SceneInput>({ destination: 'moon', moon: 0, mars: Math.PI * 0.43, dragging: false, resumeAt: 0, mission: null, missionCovered: false });
   const drag = useRef<{ id: number; x: number } | null>(null);
   const [destination, setDestination] = useState<Destination>('moon');
   const [status, setStatus] = useState<SceneStatus>({ moon: 'loading', mars: 'loading', earth: 'loading' });
   const [unavailable, setUnavailable] = useState(false);
-  const world = destinations[destination];
+  const [language, setLanguage] = useState<Language>('ru');
+  const copy = museumCopy[language];
+  const nextDestination = destination === 'moon' ? 'mars' : 'moon';
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('tmas-language');
+      if (saved === 'ru' || saved === 'en' || saved === 'tg') {
+        setLanguage(saved);
+        document.documentElement.lang = saved;
+      }
+    } catch {
+      // The selector still works with storage disabled.
+    }
+    return () => { document.documentElement.lang = 'ru'; };
+  }, []);
+
+  function changeLanguage(next: Language) {
+    setLanguage(next);
+    document.documentElement.lang = next;
+    try {
+      localStorage.setItem('tmas-language', next);
+    } catch {
+      // The selection still applies for this visit.
+    }
+
+  }
 
   useEffect(() => {
     const host = sky.current;
@@ -32,7 +62,7 @@ export default function Museum() {
 
     import('./scene').then(({ mountScene }) => {
       if (cancelled) return;
-      cleanup = mountScene(host, gallery, ending, input.current, (planet, phase) => {
+      cleanup = mountScene(host, gallery, ending, input.current, markers.current, (planet, phase) => {
         setStatus((previous) => ({ ...previous, [planet]: phase }));
       });
     }).catch(() => {
@@ -50,28 +80,75 @@ export default function Museum() {
     input.current.resumeAt = performance.now() + 3000;
   }
 
+  useEffect(() => {
+    for (const mission of Object.values(missions)) {
+      if (mission.world === destination) preload(mission.image, { as: 'image' });
+    }
+  }, [destination]);
+
+  function openMission(id: MissionId) {
+    if (!dialog.current || dialog.current.open) return;
+    setSelectedMission(id);
+    input.current.mission = id;
+    dialog.current.showModal();
+  }
+
+  function finishMission() {
+    input.current.missionCovered = false;
+    input.current.mission = null;
+    input.current.resumeAt = performance.now() + 3000;
+    dialog.current?.close();
+    setClosing(false);
+    rotation.current?.focus({ preventScroll: true });
+  }
+
+  function closeMission() {
+    if (closing) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      finishMission();
+      return;
+    }
+    input.current.missionCovered = false;
+    input.current.mission = null;
+    input.current.resumeAt = performance.now() + 3000;
+    setClosing(true);
+  }
+
   const message = unavailable
-    ? '3D-сцена недоступна в этом браузере.'
+    ? copy.unavailable
     : status[destination] === 'loading'
-      ? 'Загружаем модель…'
-      : status[destination] === 'error' ? 'Модель не загрузилась.' : '';
+      ? copy.loading
+      : status[destination] === 'error' ? copy.error : '';
 
   return (
     <main className={styles.museum}>
+      <LanguageSettings language={language} onChange={changeLanguage} />
+      <MissionDialog mission={missions[selectedMission]} language={language} onLanguageChange={changeLanguage} dialog={dialog} closing={closing} onClose={closeMission} onReveal={() => { input.current.missionCovered = true; }} onExit={finishMission} />
+      {missionIds.map((id) => {
+        const name = missions[id].copy[language].name;
+        return (
+          <button key={id} ref={(element) => {
+            if (element) markers.current[id] = element;
+            else delete markers.current[id];
+          }} hidden className={styles.marker} onClick={() => openMission(id)} aria-label={name}>
+            <span className={styles.markerCore} aria-hidden="true" />
+            <span className={styles.markerName} aria-hidden="true">{name}</span>
+          </button>
+        );
+      })}
       <div ref={sky} className={styles.sky} aria-hidden="true" />
       <section className={styles.hero} aria-labelledby="museum-title">
         <Image className={styles.logo} src="/tmas-logo.jpg" width={480} height={480} priority
           alt="TMAS — Museum of Abandoned Space" />
-        <h1 id="museum-title">Что мы оставили<br />в космосе?</h1>
-        <p>Истории аппаратов, которые остались на Луне и Марсе.</p>
-        <a className={styles.enter} href="#worlds">К Луне и Марсу <span aria-hidden="true">↓</span></a>
+        <h1 id="museum-title">{copy.title}</h1>
+        <p>{copy.intro}</p>
       </section>
 
       <section id="worlds" ref={explore} className={styles.explore} aria-labelledby="world-title">
         <div className={styles.exploreFrame}>
-          <h2 id="world-title" className={styles.visuallyHidden} aria-live="polite">{world.name}</h2>
-          <div className={styles.rotation} role="group" tabIndex={message ? -1 : 0}
-            aria-label={`Вращение модели: ${world.name}. Используй стрелки влево и вправо.`}
+          <h2 id="world-title" className={styles.visuallyHidden} aria-live="polite">{copy[destination]}</h2>
+          <div ref={rotation} className={styles.rotation} role="group" tabIndex={message ? -1 : 0}
+            aria-label={`${copy[destination]}. ${copy.rotate}`}
             onKeyDown={(event) => {
               if (message || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
               event.preventDefault();
@@ -95,10 +172,9 @@ export default function Museum() {
             }}
           />
           <button className={styles.next} onClick={() => {
-            const next = destination === 'moon' ? 'mars' : 'moon';
-            input.current.destination = next;
-            setDestination(next);
-          }} aria-label={`Показать: ${world.next}`}>
+            input.current.destination = nextDestination;
+            setDestination(nextDestination);
+          }} aria-label={`${copy.show} · ${copy[nextDestination]}`}>
             <span aria-hidden="true">→</span>
           </button>
           <p className={styles.hint} role="status">{message}</p>
@@ -107,23 +183,10 @@ export default function Museum() {
 
       <section ref={finale} className={styles.finale} aria-labelledby="earth-title">
         <div className={styles.earthCopy}>
-          <h2 id="earth-title">Земля — начало<br />каждой экспедиции.</h2>
-          <p>Следы на Луне и Марсе напоминают, как далеко может завести простой вопрос о том, что находится за горизонтом.</p>
-          {status.earth === 'error' && <p role="status">Модель Земли не загрузилась.</p>}
+          <h2 id="earth-title">{copy.earthTitle}</h2>
+          <p>{copy.earthStory}</p>
+          {status.earth === 'error' && <p role="status">{copy.earthError}</p>}
         </div>
-        <footer className={styles.footer}>
-          <Link href="/moon-comparison">Сравнение 1K и 4K</Link>
-          <Link href="/design">Эскизы</Link>
-          <details className={styles.credits}>
-            <summary>Авторы моделей</summary>
-            <ul>
-              <li><a href="https://sketchfab.com/3d-models/the-moon-9916fcec59f04b07b3e8d7f077dc3ded">Луна — SebastianSosnowski</a></li>
-              <li><a href="https://sketchfab.com/3d-models/mars-5fc8b7168b044527a05ed3903c998b65">Марс — AirStudios</a></li>
-              <li><a href="https://sketchfab.com/3d-models/earth-c2e4294c32ea4d8b850e152fc26aeeb4">Земля — ABOD.ANIMATION</a></li>
-            </ul>
-            <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · освещение и материал Земли адаптированы для сцены.
-          </details>
-        </footer>
       </section>
     </main>
   );

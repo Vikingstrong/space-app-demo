@@ -60,15 +60,6 @@
   line-height: 1.5;
 }
 
-.enter {
-  display: inline-flex;
-  gap: .7rem;
-  margin-top: clamp(1.6rem, 5svh, 3.5rem);
-  padding-block: .35rem;
-  border-block-end: 1px solid #72737d;
-  text-decoration: none;
-}
-
 .explore { min-height: 160svh; }
 
 .exploreFrame {
@@ -152,28 +143,363 @@
   background-position: bottom;
 }
 
-.earthCopy, .footer { position: relative; }
+.earthCopy { position: relative; }
 
 .earthCopy { text-shadow: 0 2px 24px #000; }
 
 .earthCopy h2 { max-width: 13ch; font-size: clamp(2.8rem, 7vw, 7rem); }
 
-.footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: .75rem 1.5rem;
-  margin-top: 3rem;
-  font-size: .9rem;
-  color: #c9cbd3;
-}
-
-.footer a { text-underline-offset: .2em; }
-.credits summary { cursor: pointer; }
-.credits ul { padding-left: 1.2rem; }
-
 @media (max-width: 739px) {
   .next { top: auto; bottom: 10%; transform: none; }
   .hint { bottom: 4%; }
   .finale { padding-top: 12svh; }
+}
+
+.marker {
+  position: fixed;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: white;
+  transform: translate(-50%, -50%);
+  touch-action: manipulation;
+}
+
+.marker[hidden] { display: none; }
+
+.marker::before,
+.marker::after {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.marker::before {
+  inset: 4px;
+  border: 1px solid #ffffff50;
+  background: radial-gradient(circle, #ffffff28, transparent 72%);
+  animation: markerPulse 2.5s ease-in-out infinite;
+}
+
+.marker::after {
+  inset: 15px;
+  border: 1px solid #ffffffc0;
+  box-shadow: 0 0 10px #ffffff42;
+}
+
+.markerCore {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 0 8px 2px #ffffffab;
+}
+
+.markerName {
+  position: absolute;
+  left: calc(100% + .25rem);
+  padding: .32rem .58rem;
+  color: white;
+  background: #1011169c;
+  border: 1px solid #ffffff20;
+  border-radius: .45rem;
+  backdrop-filter: blur(8px);
+  font-size: .875rem;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+  pointer-events: none;
+}
+
+.marker:hover .markerName,
+.marker:focus-visible .markerName {
+  opacity: 1;
+}
+
+@keyframes markerPulse {
+  0%, 100% { opacity: .55; transform: scale(.92); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.mission {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #f5f5f5;
+  overflow: hidden;
+}
+
+.mission::backdrop { background: transparent; }
+
+.missionPanel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, .92fr);
+  align-items: center;
+  background: #0b0c10;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.mission[open] .missionPanel { animation: missionReveal 1580ms both; }
+.mission[open][data-closing='true'] .missionPanel { animation: missionHide 1280ms both; }
+
+.missionBack {
+  position: fixed;
+  z-index: 2;
+  inset: 1.25rem auto auto max(.5rem, env(safe-area-inset-left));
+  padding: .65rem .95rem;
+  border: 1px solid #ffffff30;
+  border-radius: 999px;
+  background: #10121873;
+  backdrop-filter: blur(12px);
+  color: white;
+}
+
+.missionPhoto {
+  position: relative;
+  align-self: stretch;
+  min-height: 28rem;
+  margin: 0;
+}
+
+.missionPhoto img {
+  object-fit: cover;
+  object-position: center 54%;
+  filter: grayscale(.85) brightness(.79);
+  mask-image: linear-gradient(to right, black 47%, #000d 65%, #0006 84%, transparent);
+}
+
+.missionPhoto figcaption {
+  position: absolute;
+  inset: auto auto 1.5rem var(--gutter);
+  max-width: 82%;
+  padding: .4rem .65rem;
+  background: radial-gradient(ellipse at center, #0b0c108c, transparent 76%);
+  text-shadow: 0 1px 5px #000, 0 1px 12px #000;
+  color: #e2e2e8;
+  font-size: .8rem;
+}
+
+.missionCopy {
+  max-width: 39rem;
+  padding: 5rem var(--gutter) 3rem clamp(1.5rem, 4vw, 5rem);
+  line-height: 1.6;
+  color: #d2d4de;
+}
+
+.missionLocation { font-size: .875rem; }
+
+.missionCopy h2 {
+  margin: 0;
+  color: white;
+  font-size: clamp(3rem, 7vw, 7rem);
+  line-height: .95;
+  letter-spacing: -.05em;
+}
+
+.missionIntro { color: white; font-size: clamp(1.1rem, 2.2vw, 1.45rem); }
+.missionSources { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; font-size: .875rem; }
+
+.missionFog {
+  --fog-highlight: #53678280;
+  --fog-shadow: #27374eac;
+  --fog-core: #141b27;
+  --fog-edge: #07090e;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.missionFog[data-fog='moon'] {
+  --fog-highlight: #e2e6efb0;
+  --fog-shadow: #abb5c6ad;
+  --fog-core: #a9b3c3;
+  --fog-edge: #657084;
+}
+
+.missionFog[data-fog='mars'] {
+  --fog-highlight: #de9d65bd;
+  --fog-shadow: #b160349e;
+  --fog-core: #9d5235;
+  --fog-edge: #482c28;
+}
+
+.missionFog::before,
+.missionFog::after {
+  content: '';
+  position: absolute;
+  inset-block: -12%;
+  width: 76%;
+  background:
+    radial-gradient(ellipse at 78% 16%, var(--fog-highlight), transparent 42%),
+    radial-gradient(ellipse at 76% 80%, var(--fog-shadow), transparent 49%),
+    radial-gradient(ellipse at 40% 48%, var(--fog-core), var(--fog-edge) 85%);
+  mask-image:
+    radial-gradient(ellipse at 29% 16%, black 48%, transparent 72%),
+    radial-gradient(ellipse at 22% 80%, black 48%, transparent 72%),
+    linear-gradient(90deg, black 68%, transparent 100%);
+  will-change: transform;
+}
+
+.missionFog::before {
+  left: 0;
+  transform: translateX(-105%);
+  --cloud-outside: translateX(-105%);
+  --cloud-covered: translateX(0);
+}
+
+.missionFog::after {
+  right: 0;
+  transform: translateX(105%) scaleX(-1);
+  --cloud-outside: translateX(105%) scaleX(-1);
+  --cloud-covered: translateX(0) scaleX(-1);
+}
+
+.mission[open] {
+  --fog-duration: 1580ms;
+}
+
+.mission[open][data-closing='true'] {
+  --fog-duration: 1280ms;
+}
+
+.mission[open] .missionFog { animation: fogTimeline var(--fog-duration) both; }
+
+.mission[open] .missionFog::before,
+.mission[open] .missionFog::after {
+  animation: cloudSweep var(--fog-duration) ease-in-out both;
+}
+
+@keyframes cloudSweep {
+  0%, 100% { transform: var(--cloud-outside); }
+  43%, 58% { transform: var(--cloud-covered); }
+}
+
+@keyframes fogTimeline {
+  from { opacity: .999; }
+  to { opacity: 1; }
+}
+
+@keyframes missionReveal {
+  0%, 45% { opacity: 0; }
+  56%, 100% { opacity: 1; }
+}
+
+@keyframes missionHide {
+  0%, 45% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+
+@media (max-width: 740px) {
+  .missionPanel { grid-template-columns: 1fr; align-items: start; }
+  .missionPhoto { min-height: 44svh; }
+  .missionPhoto img { mask-image: linear-gradient(to bottom, black 53%, #000b 74%, transparent); }
+  .missionCopy { padding: 0 var(--gutter) 3rem; }
+  .missionPhoto figcaption { bottom: .7rem; }
+  .markerName { left: 50%; top: -1.6rem; transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markerName { transition: none; }
+  .marker::before, .mission[open] .missionPanel, .mission[open] .missionFog,
+  .mission[open] .missionFog::before, .mission[open] .missionFog::after { animation: none; }
+}
+
+.languageSettings {
+  position: fixed;
+  top: max(.75rem, env(safe-area-inset-top));
+  right: max(.75rem, env(safe-area-inset-right));
+  z-index: 6;
+}
+
+.languageSettings summary {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-left: auto;
+  border: 1px solid #ffffff30;
+  border-radius: 50%;
+  background: #101218a8;
+  color: white;
+  font: 1.45rem/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.languageSettings summary::-webkit-details-marker { display: none; }
+
+.languageMenu {
+  position: absolute;
+  top: calc(100% + .5rem);
+  right: 0;
+  display: grid;
+  gap: .2rem;
+  min-width: 11rem;
+  padding: .75rem;
+  border: 1px solid #ffffff30;
+  border-radius: .6rem;
+  background: #151820ed;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 32px #0006;
+  color: white;
+}
+
+.languageMenu p {
+  margin: .15rem .6rem .3rem;
+  color: #b5c0d3;
+  font-size: .78rem;
+}
+
+.languageMenu button {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.6rem;
+  padding: .5rem .65rem;
+  align-items: center;
+  text-align: left;
+  color: #eef0f6;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: .4rem;
+}
+
+.languageMenu button:hover { background: #ffffff10; }
+
+.languageMenu button[aria-pressed='true'] {
+  background: #b8cfef1a;
+  border-color: #b8cfef38;
+}
+
+.languageMenu button span { color: #c4d9fa; }
+
+.languageSettings summary:hover,
+.languageSettings[open] summary {
+  background: #202735;
+  border-color: #b8cfef60;
+}
+
+.missionPanel .languageSettings { z-index: 2; }
+
+.missionPhoto[data-world='mars'] img {
+  filter: saturate(.8) brightness(.83);
 }

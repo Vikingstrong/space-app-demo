@@ -1,3 +1,4 @@
+import { missionIds, missions, type MissionId } from './missions';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { disposeModel, normalizeModel } from './models';
@@ -6,7 +7,7 @@ export type Destination = 'moon' | 'mars';
 type World = Destination | 'earth';
 type ModelStatus = 'loading' | 'ready' | 'error';
 export type SceneStatus = Record<World, ModelStatus>;
-export type SceneInput = { destination: Destination; moon: number; mars: number; dragging: boolean; resumeAt: number };
+export type SceneInput = { destination: Destination; moon: number; mars: number; dragging: boolean; resumeAt: number; mission: MissionId | null; missionCovered: boolean };
 
 const worlds = ['moon', 'mars', 'earth'] as const;
 const { lerp, smoothstep, damp } = THREE.MathUtils;
@@ -40,10 +41,11 @@ export function mountScene(
   explore: HTMLElement,
   finale: HTMLElement,
   input: SceneInput,
+  markers: Partial<Record<MissionId, HTMLButtonElement>>,
   onStatus: (world: World, status: ModelStatus) => void,
 ) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches ? 1.25 : 1.75));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.domElement.setAttribute('aria-hidden', 'true');
   host.appendChild(renderer.domElement);
@@ -90,6 +92,7 @@ export function mountScene(
   );
   groups.earth.add(atmosphere);
   const models: Partial<Record<World, THREE.Group>> = {};
+  const pendingUpgrades: Partial<Record<World, THREE.Group>> = {};
   const loading = new Set<World>();
   const loader = new GLTFLoader();
   const desktop = window.matchMedia('(min-width: 800px) and (pointer: fine)');
@@ -116,6 +119,14 @@ export function mountScene(
     }
 
     const normalized = normalizeModel(asset);
+    if (quality === '4k' && models[world]) {
+      pendingUpgrades[world] = normalized;
+      return;
+    }
+    installModel(world, normalized);
+  }
+
+  function installModel(world: World, normalized: THREE.Group) {
     const previous = models[world];
     groups[world].add(normalized);
     models[world] = normalized;
@@ -123,7 +134,7 @@ export function mountScene(
       groups[world].remove(previous);
       disposeModel(previous);
     }
-    onStatus(world, 'ready');
+    if (!previous) onStatus(world, 'ready');
   }
 
   function ensure(world: World) {
@@ -174,11 +185,40 @@ export function mountScene(
   let ending = finaleTop / window.innerHeight;
   let displayed: Destination = 'moon';
   const handoff = { moon: 0, mars: 0 };
+  let zoom = 0;
+  let zoomedMission: MissionId = 'lunokhod';
+  const sites = missionIds.map((id) => {
+    const mission = missions[id];
+    const latitude = THREE.MathUtils.degToRad(mission.latitude);
+    // The Mars GLB puts the centre of its map 72° west of the model's +Z axis.
+    const longitude = THREE.MathUtils.degToRad(mission.longitude - (mission.world === 'mars' ? 72 : 0));
+    return {
+      id, world: mission.world,
+      point: new THREE.Vector3(
+        Math.cos(latitude) * Math.sin(longitude),
+        Math.sin(latitude),
+        Math.cos(latitude) * Math.cos(longitude),
+      ),
+    };
+  });
+  const site = new THREE.Vector3();
+  const globeCenter = new THREE.Vector3();
   ensure('moon');
 
   renderer.setAnimationLoop((time) => {
     const dt = Math.min(0.05, (time - lastFrame) / 1000);
     lastFrame = time;
+    if (input.missionCovered) return;
+
+    if (!input.mission && !input.dragging && zoom < 0.03 && time >= input.resumeAt) {
+      for (const world of worlds) {
+        const upgrade = pendingUpgrades[world];
+        if (!upgrade) continue;
+        installModel(world, upgrade);
+        delete pendingUpgrades[world];
+        break;
+      }
+    }
     if (input.destination === 'mars' || exploreTop < height * 0.6) ensure('mars');
     if (finaleTop < height * 1.1) ensure('earth');
 
@@ -209,11 +249,47 @@ export function mountScene(
         -(risingRadius + height * 0.46) * (1 - arrival) + height * departure * 0.26,
         -850 * (1 - prominence) - 900 * departure,
       );
-      if (active && group.visible && !still && !input.dragging && time >= input.resumeAt) {
+      if (active && group.visible && !still && !input.dragging && !input.mission && zoom < 0.03 && time >= input.resumeAt) {
         input[world] -= dt * 0.085;
       }
       group.rotation.y = input[world];
       group.rotation.x = 0.1;
+    }
+
+    if (input.mission) zoomedMission = input.mission;
+    const zoomTarget = Number(Boolean(input.mission));
+    zoom = still ? 0 : damp(zoom, zoomTarget, 3, dt);
+    if (Math.abs(zoomTarget - zoom) < 0.0001) zoom = zoomTarget;
+    for (const { id, world, point } of sites) {
+      const group = groups[world];
+      group.updateMatrixWorld(true);
+      site.copy(point).applyMatrix4(group.matrixWorld);
+      globeCenter.setFromMatrixPosition(group.matrixWorld);
+      const marker = markers[id];
+      if (!marker) continue;
+      marker.hidden = !(models[world] && group.visible && displayed === world
+        && input.destination === world && arrival > 0.95 && departure < 0.06
+        && site.z - globeCenter.z > group.scale.x * 0.2 && !input.mission && zoom < 0.03);
+      if (!marker.hidden) {
+        marker.style.left = `${width / 2 + site.x}px`;
+        marker.style.top = `${height / 2 - site.y}px`;
+      }
+    }
+
+    // Zoom the orthographic view without growing the mesh through the near plane.
+    const magnification = lerp(1, 3.5, zoom);
+    if (camera.zoom !== magnification) {
+      camera.zoom = magnification;
+      camera.updateProjectionMatrix();
+    }
+    if (zoom > 0) {
+      const target = sites.find(({ id }) => id === zoomedMission)!;
+      site.copy(target.point).applyMatrix4(groups[target.world].matrixWorld);
+      camera.position.x = site.x * zoom;
+      camera.position.y = site.y * zoom;
+    } else {
+      camera.position.x = 0;
+      camera.position.y = 0;
     }
 
     const earth = groups.earth;
@@ -235,6 +311,7 @@ export function mountScene(
     resize.disconnect();
     renderer.setAnimationLoop(null);
     for (const model of Object.values(models)) disposeModel(model);
+    for (const model of Object.values(pendingUpgrades)) disposeModel(model);
     atmosphere.geometry.dispose();
     atmosphere.material.dispose();
     stars.geometry.dispose();
