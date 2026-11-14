@@ -1,0 +1,87 @@
+:root {
+  color-scheme: dark;
+  --background: #080808;
+  --foreground: #f5f5f5;
+  --muted: #b5b5b5;
+  --line: #444;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+a { color: inherit; }
+
+button { font: inherit; cursor: pointer; }
+
+:focus-visible { outline: 2px solid white; outline-offset: 5px; }
+
+.comparison {
+  max-width: 74rem;
+  margin-inline: auto;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+
+.comparison h1 {
+  font-size: clamp(2rem, 6vw, 4rem);
+  line-height: 1;
+}
+
+.comparison-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.comparison > p { color: var(--muted); }
+
+.comparison-controls button {
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: .6rem 1rem;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.comparison-controls button[aria-pressed="true"] {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.comparison-controls button:disabled { opacity: .55; }
+
+.moon-stage {
+  position: relative;
+  height: clamp(20rem, 65svh, 48rem);
+  border: 1px solid var(--line);
+  background: #000;
+}
+
+.moon-canvas { height: 100%; touch-action: pan-y; cursor: grab; }
+.moon-canvas:active { cursor: grabbing; }
+.moon-canvas canvas { display: block; }
+
+.moon-fog {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, #fff, #d9dce1);
+}
+
+.moon-status {
+  position: absolute;
+  inset: auto 1rem 0;
+  background: #080808;
+  color: #fff;
+  width: fit-content;
+}
+
+.moon-status:empty { display: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(main #worlds) { scroll-behavior: smooth; }
+}
